@@ -1,0 +1,113 @@
+---
+title: "Prediction Assignment Writeup"
+author: "TCH"
+date: "Saturday, December 02, 2017"
+output: pdf_document
+---
+
+**Overview**
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+**Loading Data and Exploratory Analysis**
+
+Firstly, it is necessary to load the R packages needed and download the training and testing data sets from the given URLs.
+
+```{r}
+library(lattice);
+library(ggplot2);
+library(caret); 
+library(rattle); 
+library(rpart); 
+library(rpart.plot)
+library(randomForest); 
+
+set.seed(7899)
+
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+
+```
+
+We can observe that the training dataset has 19622 observations and 160 variables, and the testing dataset has 20 observations and also 160 variables. The "classe" variable in the training set is going to be predicted.
+
+Now, we clean the data by deleting missing values and all unnecessary columns.
+
+```{r}
+training <- training[, colSums(is.na(training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+
+datatrain <- training[, -c(1:7)]
+datatest <- testing[, -c(1:7)]
+```
+
+Then, we split the cleaned training dataset into a training set (train 60%) for prediction and a validation set (valid 40%).
+
+```{r}
+set.seed(7899) 
+inTrain <- createDataPartition(datatrain$classe, p = 0.6, list = FALSE)
+train <- datatrain[inTrain, ]
+valid <- datatrain[-inTrain, ]
+dim(train)
+dim(valid)
+```
+
+We can observe that we have now 11776 observations in the train and 7846 observations in the validation with 53 variables in both.
+
+**Prediction**
+
+We try to predict with : Regression, Decision Trees and Random Forests.
+
+With Regression
+
+```{r}
+set.seed(7899)
+fit <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+gbm <- train(classe ~ ., data=train, method = "gbm", trControl = fit, verbose=FALSE)
+gbmFinal <- gbm$finalModel
+gbmValid <- predict(gbm, newdata=valid)
+gbmFinalValid <- confusionMatrix(gbmValid, valid$classe)
+gbmFinalValid
+```
+
+With Decision Trees
+
+```{r}
+set.seed(7899)
+fit2 <- trainControl(method = "cv", number = 5)
+rpart <- train(classe ~ ., data = train, method = "rpart", trControl = fit2)
+rpartValid <- predict(rpart, valid)
+rpartFinalValid <- confusionMatrix(rpartValid, valid$classe)
+rpartFinalValid
+```
+
+With Random Forests
+
+```{r}
+set.seed(7899)
+random <- randomForest(classe ~ ., data = train)
+randomValid <- predict(random, valid, type = "class")
+randomFinalValid <- confusionMatrix(randomValid, valid$classe)
+randomFinalValid
+```
+
+So we can see, from the confusion matrix of 3 methods, the accuracy rate of Random Forests method is 0.9945 compared to 0.4967 of Decision Trees and 0.9667 of GBM. So Random Forests method is the best way to predict in this case.
+
+**Prediction on Testing dataset**
+
+```{r}
+(predict(random, testing, type = "class"))
+```
